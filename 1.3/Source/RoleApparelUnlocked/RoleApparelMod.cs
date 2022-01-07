@@ -17,6 +17,28 @@ namespace RoleApparelUnlocked
 
         public static Vector2 scrollPosition = Vector2.zero;
 
+        public List<string> currentApparelLoaded = new List<string>();
+
+        public List<string> CurrentApparelLoaded 
+        { 
+            get 
+            {
+                if (currentApparelLoaded.NullOrEmpty())
+                {
+                    List<string> list = (from x in settings.apparelDictionary.Keys.ToList() orderby x descending select x).ToList();
+                    for(int i = list.Count - 1; i >= 0; i--)
+                    {
+                        ThingDef apparel = DefDatabase<ThingDef>.GetNamedSilentFail(list[i]);
+                        if(apparel != null && !currentApparelLoaded.Contains(list[i]))
+                        {
+                            currentApparelLoaded.Add(list[i]);
+                        }
+                    }
+                }
+                return currentApparelLoaded;
+            }
+        }
+
         public RoleApparelMod(ModContentPack content) : base(content)
         {
             mod = this;
@@ -28,26 +50,25 @@ namespace RoleApparelUnlocked
         public override void DoSettingsWindowContents(Rect inRect)
         {
             base.DoSettingsWindowContents(inRect);
-            List<string> list = (from x in settings.apparelDictionary.Keys.ToList() orderby x descending select x).ToList();
             Listing_Standard listing_Standard = new Listing_Standard();
             Rect outRect = new Rect(inRect.x, inRect.y, inRect.width, inRect.height);
-            Rect rect = new Rect(0f, 0f, inRect.width - 30f, (float)((list.Count / 2 + 2) * 24));
+            Rect rect = new Rect(0f, 0f, inRect.width - 30f, (float)((CurrentApparelLoaded.Count / 2 + 2) * 24));
             Widgets.BeginScrollView(outRect, ref scrollPosition, rect, true);
             listing_Standard.ColumnWidth = rect.width / 2.2f;
             listing_Standard.Begin(rect);
-            for (int i = list.Count - 1; i >= 0; i--)
+            for (int i = CurrentApparelLoaded.Count - 1; i >= 0; i--)
             {
-                if (i == list.Count / 2)
+                if (i == CurrentApparelLoaded.Count / 2)
                 {
                     listing_Standard.NewColumn();
                 }
 
-                ThingDef apparel = DefDatabase<ThingDef>.GetNamedSilentFail(list[i]);
+                ThingDef apparel = DefDatabase<ThingDef>.GetNamedSilentFail(CurrentApparelLoaded[i]);
                 if(apparel != null)
                 {
-                    bool value = settings.apparelDictionary[list[i]];
+                    bool value = settings.apparelDictionary[CurrentApparelLoaded[i]];
                     listing_Standard.CheckboxLabeled(apparel.LabelCap, ref value, null);
-                    settings.apparelDictionary[list[i]] = value;
+                    settings.apparelDictionary[CurrentApparelLoaded[i]] = value;
                 }
             }
             listing_Standard.End();
@@ -94,7 +115,7 @@ namespace RoleApparelUnlocked
                                    select x).ToList();
             foreach (ThingDef def in list)
             {
-                if (!settings.apparelDictionary.ContainsKey(def.defName) && def?.apparel != null && !def.apparel.bodyPartGroups.NullOrEmpty())
+                if (!settings.apparelDictionary.ContainsKey(def.defName) && IsViableApparel(def))
                 {
                     bool headwear = def.apparel.layers.Contains(ApparelLayerDefOf.Overhead);
                     settings.apparelDictionary.Add(def.defName, headwear);
@@ -102,11 +123,32 @@ namespace RoleApparelUnlocked
             }
         }
 
+        public static bool IsViableApparel(ThingDef def)
+        {
+            if(def?.apparel != null && !def.apparel.bodyPartGroups.NullOrEmpty() && !HasBlockedTag(def))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public static bool HasBlockedTag(ThingDef def)
+        {
+            if(def?.apparel != null && !def.apparel.tags.NullOrEmpty())
+            {
+                if (def.apparel.tags.Contains("WarcasketAll"))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public static void GenerateApparelListing(RoleApparelSettings settings)
         {
             RoleApparelRequirementsFull = new List<PreceptApparelRequirement>();
             IEnumerable<ThingDef> enumerable = from def in DefDatabase<ThingDef>.AllDefs
-                                               where (bool)(def?.IsApparel) && settings.apparelDictionary[def.defName]
+                                               where (bool)(def?.IsApparel) && IsViableApparel(def) && settings.apparelDictionary.ContainsKey(def.defName)
                                                select def;
 
             List<ThingDef> allApparel = enumerable.ToList();
